@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Image Text Editor</title>
+    <style>
+        #imageCanvas {
+            border: 1px solid #ddd;
+            position: relative;
+        }
+        #textOverlay {
+            position: absolute;
+            cursor: move;
+            color: #000000;
+            font-size: 20px;
+            user-select: text;
+            display: none;
+            white-space: pre-wrap;
+            min-width: 100px;
+            min-height: 30px;
+            outline: none;
+        }
+        .container {
+            margin-bottom: 20px;
+        }
+        #textInputContainer {
+            display: none;
+            margin-top: 10px;
+        }
+        #textInput {
+            width: 300px;
+            min-height: 30px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            overflow: auto;
+            outline: none;
+            white-space: pre-wrap;
+            color: #000000; /* Always black */
+            font-size: 16px; /* Constant font size */
+        }
+        #controls {
+            display: inline-block;
+            margin-left: 10px;
+            vertical-align: top;
+        }
+        #fontSizeInput {
+            width: 60px;
+        }
+        #formatButtons button {
+            margin-right: 5px;
+        }
+        #fontFamilySelect {
+            width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <label for="imageUrl">Image URL:</label>
+        <input type="text" id="imageUrl" placeholder="Enter image URL" style="width: 300px;">
+        <button id="loadButton">Load Image</button>
+    </div>
+    <div class="container">
+        <div style="position: relative; display: inline-block;">
+            <canvas id="imageCanvas"></canvas>
+            <div id="textOverlay" contenteditable="true">Enter text here</div>
+        </div>
+    </div>
+    <div id="textInputContainer">
+        <label for="textInput">Enter text:</label>
+        <div id="textInput" contenteditable="true" placeholder="Type here..."></div>
+        <div id="controls">
+            <label for="fontFamilySelect">Font:</label>
+            <select id="fontFamilySelect">
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Courier New">Courier New</option>
+            </select>
+            <label for="fontSizeInput">Size:</label>
+            <input type="number" id="fontSizeInput" value="20" min="10" max="100">
+            <label for="colorPicker">Color:</label>
+            <input type="color" id="colorPicker" value="#000000">
+            <div id="formatButtons">
+                <button id="boldButton" type="button"><b>B</b></button>
+                <button id="italicButton" type="button"><i>I</i></button>
+                <button id="underlineButton" type="button"><u>U</u></button>
+            </div>
+        </div>
+    </div>
+    <div>
+        <button id="downloadButton">Download Image</button>
+    </div>
+    <!-- New Calculate Button Section -->
+    <div style="margin-top: 20px;">
+        <button id="calculateButton">Calculate</button>
+        <div id="calculationResults" style="margin-top: 10px;"></div>
+    </div>
+
+    <!-- Include FileSaver.js and html2canvas from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script>
+        const imageUrlInput = document.getElementById('imageUrl');
+        const loadButton = document.getElementById('loadButton');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const textOverlay = document.getElementById('textOverlay');
+        const textInputContainer = document.getElementById('textInputContainer');
+        const textInput = document.getElementById('textInput');
+        const fontFamilySelect = document.getElementById('fontFamilySelect');
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const colorPicker = document.getElementById('colorPicker');
+        const boldButton = document.getElementById('boldButton');
+        const italicButton = document.getElementById('italicButton');
+        const underlineButton = document.getElementById('underlineButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const calculateButton = document.getElementById('calculateButton');
+        const calculationResults = document.getElementById('calculationResults');
+        const ctx = imageCanvas.getContext('2d');
+        let image = new Image();
+        let isSyncing = false;
+
+        // Function to load the image onto the canvas
+        loadButton.addEventListener('click', () => {
+            const imageUrl = imageUrlInput.value;
+            if (imageUrl) {
+                image.crossOrigin = "Anonymous"; // To avoid CORS issues when downloading
+                image.src = imageUrl;
+                image.onload = () => {
+                    imageCanvas.width = image.width;
+                    imageCanvas.height = image.height;
+                    ctx.drawImage(image, 0, 0);
+
+                    // Center the text overlay
+                    textOverlay.style.display = 'block';
+                    textOverlay.style.top = `${(imageCanvas.height / 2) - 10}px`;
+                    textOverlay.style.left = `${(imageCanvas.width / 2) - 50}px`;
+                    textOverlay.innerHTML = 'Enter text here';
+
+                    textInputContainer.style.display = 'block';
+                    textInput.innerHTML = textOverlay.innerHTML;
+
+                    // Apply initial styles
+                    textOverlay.style.fontFamily = fontFamilySelect.value;
+                    textOverlay.style.fontSize = fontSizeInput.value + 'px';
+                    textOverlay.style.color = colorPicker.value;
+
+                    textInput.style.fontFamily = fontFamilySelect.value;
+                    textInput.style.color = '#000000'; // Always black
+                    // textInput font size remains constant (defined in CSS)
+                };
+                image.onerror = () => alert('Invalid image URL. Please try again.');
+            }
+        });
+
+        // Synchronize content and formatting between textInput and textOverlay
+        function syncContent(source, target) {
+            if (isSyncing) return;
+            isSyncing = true;
+            target.innerHTML = source.innerHTML;
+            target.style.fontFamily = source.style.fontFamily;
+            // Handle font size
+            if (source === textInput) {
+                // Do not sync font size from textInput to textOverlay
+            } else {
+                // When syncing from textOverlay to textInput, do not change font size
+            }
+            // Handle text color
+            if (source === textInput) {
+                // Do not sync color from textInput to textOverlay
+                // Keep textInput color always black
+            } else {
+                // When syncing from textOverlay to textInput, set color to black
+                target.style.color = '#000000';
+            }
+            isSyncing = false;
+        }
+
+        textInput.addEventListener('input', () => {
+            syncContent(textInput, textOverlay);
+        });
+
+        textOverlay.addEventListener('input', () => {
+            syncContent(textOverlay, textInput);
+        });
+
+        // Update font family
+        fontFamilySelect.addEventListener('change', () => {
+            textInput.style.fontFamily = fontFamilySelect.value;
+            textOverlay.style.fontFamily = fontFamilySelect.value;
+        });
+
+        // Update font size (only for textOverlay)
+        fontSizeInput.addEventListener('input', () => {
+            const fontSize = parseInt(fontSizeInput.value);
+            textOverlay.style.fontSize = fontSize + 'px';
+            // Do not change textInput font size
+        });
+
+        // Update text color (only for textOverlay)
+        colorPicker.addEventListener('input', () => {
+            textOverlay.style.color = colorPicker.value;
+            // Do not change textInput color
+        });
+
+        // Formatting functions
+        function applyFormatting(command) {
+            document.execCommand(command, false, null);
+        }
+
+        boldButton.addEventListener('click', () => {
+            applyFormatting('bold');
+        });
+
+        italicButton.addEventListener('click', () => {
+            applyFormatting('italic');
+        });
+
+        underlineButton.addEventListener('click', () => {
+            applyFormatting('underline');
+        });
+
+        // Ensure formatting applies to focused element
+        [textInput, textOverlay].forEach(element => {
+            element.addEventListener('focus', () => {
+                document.designMode = 'off';
+            });
+        });
+
+        // Make the text draggable and stay within the image boundaries
+        textOverlay.addEventListener('mousedown', function (e) {
+            if (e.target !== textOverlay) return; // Only allow dragging from the overlay background
+            e.preventDefault(); // Prevent text selection
+            let shiftX = e.clientX - textOverlay.getBoundingClientRect().left;
+            let shiftY = e.clientY - textOverlay.getBoundingClientRect().top;
+
+            function moveAt(pageX, pageY) {
+                const canvasRect = imageCanvas.getBoundingClientRect();
+                let newLeft = pageX - canvasRect.left - shiftX;
+                let newTop = pageY - canvasRect.top - shiftY;
+
+                // Ensure the text stays within the canvas boundaries
+                newLeft = Math.max(0, Math.min(newLeft, imageCanvas.width - textOverlay.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, imageCanvas.height - textOverlay.offsetHeight));
+
+                textOverlay.style.left = newLeft + 'px';
+                textOverlay.style.top = newTop + 'px';
+            }
+
+            function onMouseMove(e) {
+                moveAt(e.pageX, e.pageY);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+
+            document.onmouseup = function () {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.onmouseup = null;
+            };
+        });
+
+        textOverlay.ondragstart = function () {
+            return false;
+        };
+
+        // Download the merged image using html2canvas and FileSaver.js
+        downloadButton.addEventListener('click', () => {
+            // Create an off-screen canvas for downloading
+            const offScreenCanvas = document.createElement('canvas');
+            offScreenCanvas.width = imageCanvas.width;
+            offScreenCanvas.height = imageCanvas.height;
+            const offScreenCtx = offScreenCanvas.getContext('2d');
+
+            // Draw the image onto the off-screen canvas
+            offScreenCtx.drawImage(image, 0, 0);
+
+            // Use html2canvas to render the text overlay as an image
+            html2canvas(textOverlay, {
+                backgroundColor: null,
+                scale: 1,
+                useCORS: true
+            }).then((textCanvas) => {
+                const overlayLeft = parseFloat(textOverlay.style.left);
+                const overlayTop = parseFloat(textOverlay.style.top);
+
+                // Draw the rendered text onto the off-screen canvas
+                offScreenCtx.drawImage(textCanvas, overlayLeft, overlayTop);
+
+                // Convert the off-screen canvas to a blob and save it using FileSaver.js
+                offScreenCanvas.toBlob(function (blob) {
+                    saveAs(blob, 'merged-image.png');
+                }, 'image/png');
+            }).catch((error) => {
+                console.error('Error rendering text overlay:', error);
+                alert('An error occurred while rendering the text overlay.');
+            });
+        });
+
+        // Calculate and display dimensions and positions
+        calculateButton.addEventListener('click', () => {
+            // Get image dimensions
+            const imageWidth = imageCanvas.width;
+            const imageHeight = imageCanvas.height;
+
+            // Get text overlay dimensions
+            const textWidth = textOverlay.offsetWidth;
+            const textHeight = textOverlay.offsetHeight;
+
+            // Get text overlay position relative to the image
+            const textX = parseFloat(textOverlay.style.left);
+            const textY = parseFloat(textOverlay.style.top);
+
+            // Display the results
+            calculationResults.innerHTML = `
+                <p><strong>Image Dimensions:</strong> Width = ${imageWidth}px, Height = ${imageHeight}px</p>
+                <p><strong>Text Dimensions:</strong> Width = ${textWidth}px, Height = ${textHeight}px</p>
+                <p><strong>Text Position:</strong> X = ${textX}px, Y = ${textY}px</p>
+            `;
+        });
+    </script>
+</body>
+</html>
